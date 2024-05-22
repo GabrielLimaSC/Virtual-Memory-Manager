@@ -13,6 +13,7 @@
 #define TLB_TRUE 5
 #define TLB_FALSE 6
 #define PHYSICAL_MEMORY_TRUE 7
+#define PHYSICAL_MEMORY_FALSE 8
 
 typedef struct page
 {
@@ -34,27 +35,23 @@ typedef struct page
 void read_file(char *filename, page **list);
 void convert(page *list, int arg, int arg2);
 void print_addresses(FILE *output, page *list);
-void search_instruction(page *lista, FILE *file);
+void search_instruction(page *list, FILE *file);
 int signed_char_to_int(unsigned char byte);
-void fifo(page *list, int *tlb, int *frame_number, int arg, int arg2);
-
+void fifo(page *list, int arg, int arg2);
 
 void read_file(char *filename, page **list)
 {
-
     FILE *file = fopen(filename, "r");
     if (file == NULL)
     {
         exit(1);
     }
 
-    int tlb = 0;
-    int frame_number = 0;
-
     char line[20];
+    page *tail = NULL;
+
     while (fgets(line, sizeof(line), file))
     {
-
         page *new_page = (page *)malloc(sizeof(page));
         if (new_page == NULL)
         {
@@ -62,50 +59,26 @@ void read_file(char *filename, page **list)
         }
 
         new_page->virtual_address = atoi(line);
-        new_page->TLB = tlb;
-        new_page->frame_number = frame_number;
-        tlb++;
-        frame_number++;
-        fifo(new_page, &tlb, &frame_number, TLB_TRUE, PHYSICAL_MEMORY_TRUE);
-        new_page->next = *list;
-        *list = new_page;
+        new_page->next = NULL;
+
+        if (*list == NULL)
+        {
+            *list = new_page;
+        }
+        else
+        {
+            tail->next = new_page;
+        }
+
+        tail = new_page;
     }
 
     fclose(file);
 }
 
-void fifo(page *list, int *tlb, int *frame_number, int arg, int arg2) // arg = tlb, arg2 = frame_number
-{
-    if (arg == 5) // fifo para tlb
-    {
-        if (list == NULL)
-            return;
-
-        if (list->TLB == 16)
-        {
-            list->TLB = 0;
-            *tlb = 1;
-        }
-    }
-
-    if (arg2 == 6) // fifo para frame_number
-    {
-        if (list == NULL)
-            return;
-
-        if (list->frame_number == 256)
-        {
-            list->frame_number = 0;
-            *frame_number = 1;
-        }
-
-    }
-}
-
 void convert(page *list, int arg, int arg2)
 {
-
-    if (arg == 1)
+    if (arg == DECIMAL_TO_BINARY)
     { // converte de decimal para binário
         while (list != NULL)
         {
@@ -121,10 +94,10 @@ void convert(page *list, int arg, int arg2)
             list = list->next;
         }
     }
-    else if (arg == 2)
+    else if (arg == BINARY_TO_DECIMAL)
     { // converte de binário para decimal
 
-        if (arg2 == 4)
+        if (arg2 == SEPARATE_TRUE)
         { // separa binario em dois numeros e converte para decimal
             while (list != NULL)
             {
@@ -134,7 +107,6 @@ void convert(page *list, int arg, int arg2)
 
                 for (int i = 0; i < 16; i++)
                 {
-
                     if (i < 8)
                     {
                         page_number += (list->binary_address[i] - '0') * pow(2, j);
@@ -154,9 +126,8 @@ void convert(page *list, int arg, int arg2)
                 list = list->next;
             }
         }
-        else if (arg2 == 3)
+        else if (arg2 == SEPARATE_FALSE)
         { // converte binario inteiro
-
             while (list != NULL)
             {
                 int number = 0;
@@ -190,6 +161,68 @@ int signed_char_to_int(unsigned char byte)
     }
 }
 
+void fifo(page *list, int arg, int arg2) // arg = tlb, arg2 = frame_number
+{
+    static page *temp_list = NULL; 
+
+    if (arg == TLB_TRUE) // FIFO para TLB
+    {
+        if (list == NULL)
+            return;
+
+        int tlb_index = 0;
+        page *current = list;
+        
+        if (temp_list == NULL)
+        {
+            temp_list = (page *)malloc(sizeof(page) * 16);
+            memset(temp_list, 0, sizeof(page) * 16);
+        }
+
+        while (current != NULL)
+        {
+            bool found = false;
+
+            for (int i = 0; i < 16; i++)
+            {
+                if (temp_list[i].page_number == current->page_number)
+                {
+                    current->TLB = temp_list[i].TLB;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                current->TLB = tlb_index;
+                tlb_index = (tlb_index + 1) % 16;
+            }
+
+            temp_list[tlb_index].page_number = current->page_number;
+            temp_list[tlb_index].TLB = current->TLB;
+
+            current = current->next;
+        }
+    }
+
+    if (arg2 == PHYSICAL_MEMORY_TRUE) // FIFO para frame_number
+    {
+        if (list == NULL)
+            return;
+
+        int frame_index = 0;
+        page *current = list;
+
+        while (current != NULL)
+        {
+            current->frame_number = frame_index;
+            frame_index = (frame_index + 1) % 256; // Incrementa e reinicia ao atingir 256
+            current = current->next;
+        }
+    }
+}
+
 void search_instruction(page *list, FILE *file)
 {
     while (list != NULL)
@@ -213,14 +246,15 @@ void search_instruction(page *list, FILE *file)
 
 void print_addresses(FILE *output, page *list)
 {
-    if (list == NULL)
-        return;
-
-    print_addresses(output, list->next);
-    fprintf(output, "Virtual address: %d ", list->virtual_address);
-    fprintf(output, "TLB: %d ", list->TLB);
-    fprintf(output, "Physical address: %d ", list->physical_address);
-    fprintf(output, "value: %d\n", list->value);
+    page *current = list;
+    while (current != NULL)
+    {
+        fprintf(output, "Virtual address: %d ", current->virtual_address);
+        fprintf(output, "TLB: %d ", current->TLB);
+        fprintf(output, "Physical address: %d ", current->physical_address);
+        fprintf(output, "value: %d\n", current->value);
+        current = current->next;
+    }
 }
 
 int main()
@@ -229,6 +263,8 @@ int main()
     read_file("addresses.txt", &list);
     convert(list, DECIMAL_TO_BINARY, SEPARATE_FALSE);
     convert(list, BINARY_TO_DECIMAL, SEPARATE_TRUE);
+    fifo(list, TLB_TRUE, PHYSICAL_MEMORY_FALSE);
+    fifo(list, TLB_FALSE, PHYSICAL_MEMORY_TRUE);
     FILE *file = fopen("BACKING_STORE.bin", "rb");
     search_instruction(list, file);
 
