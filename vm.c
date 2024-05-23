@@ -25,7 +25,9 @@ typedef struct page
     int binary_to_decimal;
     int TLB;
     int TLB_address;
+    int translated_address;
     int TLB_Hits;
+    int page_faults;
     int instruction;
     int physical_address;
     int value;
@@ -49,6 +51,7 @@ void read_file(char *filename, page **list)
     }
 
     char line[20];
+    int translated = 0;
     page *tail = NULL;
 
     while (fgets(line, sizeof(line), file))
@@ -60,6 +63,7 @@ void read_file(char *filename, page **list)
         }
 
         new_page->virtual_address = atoi(line);
+        translated++;
         new_page->next = NULL;
 
         if (*list == NULL)
@@ -72,6 +76,10 @@ void read_file(char *filename, page **list)
         }
 
         tail = new_page;
+    }
+    if (*list != NULL)
+    {
+        (*list)->translated_address = translated; // corrected to set the translated_address in the head node
     }
 
     fclose(file);
@@ -166,6 +174,7 @@ void fifo(page *list, int arg, int arg2)
 {
     static page *temp_list = NULL;
     int tlb_hits = 0;
+    int page_faults = 0;
 
     if (arg == TLB_TRUE)
     {
@@ -247,10 +256,12 @@ void fifo(page *list, int arg, int arg2)
                 temp_list2[frame_index].page_number = current2->page_number;
                 temp_list2[frame_index].frame_number = current2->frame_number;
                 frame_index = (frame_index + 1) % 128;
+                page_faults++; // Increment page faults count
             }
 
             current2 = current2->next;
         }
+        list->page_faults = page_faults;
     }
 }
 
@@ -284,11 +295,19 @@ void print_addresses(FILE *output, page *list)
         fprintf(output, "TLB: %d ", current->TLB);
         // fprintf(output, "Page number: %d ", current->page_number);
         // fprintf(output, "Frame number: %d ", current->frame_number);
+        // fprintf(output, "Offset: %d ", current->offset);
+        // fprintf(output, "Binary to decimal: %d ", current->binary_to_decimal);
+        // fprintf(output, "TLB address: %d ", current->TLB_address);
+        // fprintf(output, "Instruction: %d ", current->instruction);
         fprintf(output, "Physical address: %d ", current->physical_address);
         fprintf(output, "Value: %d\n", current->value);
         current = current->next;
     }
+    fprintf(output, "Number of Translated Addresses = %d\n", list->translated_address);
+    fprintf(output, "Page Faults = %d\n", list->page_faults);
+    fprintf(output, "Page Fault Rate = %.3f\n", (float)list->page_faults / (float)list->translated_address);
     fprintf(output, "TLB Hits = %d\n", list->TLB_Hits);
+    fprintf(output, "TLB Hit Rate = %.3f\n", (float)list->TLB_Hits / (float)list->translated_address);
 }
 
 int main()
