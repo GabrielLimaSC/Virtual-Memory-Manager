@@ -25,6 +25,7 @@ typedef struct page
     int binary_to_decimal;
     int TLB;
     int TLB_address;
+    int TLB_Hits;
     int instruction;
     int physical_address;
     int value;
@@ -161,18 +162,19 @@ int signed_char_to_int(unsigned char byte)
     }
 }
 
-void fifo(page *list, int arg, int arg2) // arg = tlb, arg2 = frame_number
+void fifo(page *list, int arg, int arg2)
 {
-    static page *temp_list = NULL; 
+    static page *temp_list = NULL;
+    int tlb_hits = 0;
 
-    if (arg == TLB_TRUE) // FIFO para TLB
+    if (arg == TLB_TRUE)
     {
         if (list == NULL)
             return;
 
         int tlb_index = 0;
         page *current = list;
-        
+
         if (temp_list == NULL)
         {
             temp_list = (page *)malloc(sizeof(page) * 16);
@@ -188,6 +190,8 @@ void fifo(page *list, int arg, int arg2) // arg = tlb, arg2 = frame_number
                 if (temp_list[i].page_number == current->page_number)
                 {
                     current->TLB = temp_list[i].TLB;
+                    current->value = temp_list[i].value;
+                    tlb_hits++;
                     found = true;
                     break;
                 }
@@ -196,29 +200,56 @@ void fifo(page *list, int arg, int arg2) // arg = tlb, arg2 = frame_number
             if (!found)
             {
                 current->TLB = tlb_index;
+                temp_list[tlb_index].page_number = current->page_number;
+                temp_list[tlb_index].TLB = current->TLB;
                 tlb_index = (tlb_index + 1) % 16;
             }
-
-            temp_list[tlb_index].page_number = current->page_number;
-            temp_list[tlb_index].TLB = current->TLB;
+            list->TLB_Hits = tlb_hits;
 
             current = current->next;
         }
     }
 
-    if (arg2 == PHYSICAL_MEMORY_TRUE) // FIFO para frame_number
+    static page *temp_list2 = NULL;
+
+    if (arg2 == PHYSICAL_MEMORY_TRUE)
     {
         if (list == NULL)
             return;
 
         int frame_index = 0;
-        page *current = list;
+        page *current2 = list;
 
-        while (current != NULL)
+        if (temp_list2 == NULL)
         {
-            current->frame_number = frame_index;
-            frame_index = (frame_index + 1) % 256; // Incrementa e reinicia ao atingir 256
-            current = current->next;
+            temp_list2 = (page *)malloc(sizeof(page) * 128);
+            memset(temp_list2, 0, sizeof(page) * 128);
+        }
+
+        while (current2 != NULL)
+        {
+            bool found = false;
+
+            for (int i = 0; i < 128; i++)
+            {
+                if (temp_list2[i].page_number == current2->page_number)
+                {
+                    current2->frame_number = temp_list2[i].frame_number;
+                    current2->value = temp_list2[i].value;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                current2->frame_number = frame_index;
+                temp_list2[frame_index].page_number = current2->page_number;
+                temp_list2[frame_index].frame_number = current2->frame_number;
+                frame_index = (frame_index + 1) % 128;
+            }
+
+            current2 = current2->next;
         }
     }
 }
@@ -251,10 +282,13 @@ void print_addresses(FILE *output, page *list)
     {
         fprintf(output, "Virtual address: %d ", current->virtual_address);
         fprintf(output, "TLB: %d ", current->TLB);
+        // fprintf(output, "Page number: %d ", current->page_number);
+        // fprintf(output, "Frame number: %d ", current->frame_number);
         fprintf(output, "Physical address: %d ", current->physical_address);
-        fprintf(output, "value: %d\n", current->value);
+        fprintf(output, "Value: %d\n", current->value);
         current = current->next;
     }
+    fprintf(output, "TLB Hits = %d\n", list->TLB_Hits);
 }
 
 int main()
