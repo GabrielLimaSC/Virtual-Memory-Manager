@@ -35,7 +35,6 @@ typedef struct page
     int value;
     struct page *next;
     struct page *prev;
-
 } page;
 
 void read_file(char *filename, page **list);
@@ -301,12 +300,13 @@ void lru(page *list, int arg, int arg2)
                     tlb_hits++;
                     found = true;
 
-                    // usada recentemente, mover para o final
+                    // Usada recentemente, mover para o final
+                    page temp = temp_list[i];
                     for (int j = i; j < 15; j++)
                     {
                         temp_list[j] = temp_list[j + 1];
                     }
-                    temp_list[15] = *current;
+                    temp_list[15] = temp;
                     break;
                 }
             }
@@ -353,12 +353,13 @@ void lru(page *list, int arg, int arg2)
                     current2->value = temp_list2[i].value;
                     found = true;
 
-                    // usada recentemente, mover para o final
+                    // Usada recentemente, mover para o final
+                    page temp = temp_list2[i];
                     for (int j = i; j < 127; j++)
                     {
                         temp_list2[j] = temp_list2[j + 1];
                     }
-                    temp_list2[127] = *current2;
+                    temp_list2[127] = temp;
                     break;
                 }
             }
@@ -453,7 +454,7 @@ int main(int argc, char *argv[])
     read_file(address_file, &list);
     convert(list, DECIMAL_TO_BINARY, SEPARATE_FALSE);
     convert(list, BINARY_TO_DECIMAL, SEPARATE_TRUE);
-    fifo(list, TLB_TRUE, PHYSICAL_MEMORY_FALSE); // TLB será aplicado apenas o fifo
+    fifo(list, TLB_TRUE, PHYSICAL_MEMORY_FALSE); // TLB será aplicado apenas no FIFO
 
     if (strcmp(algorithm, "fifo") == 0)
     {
