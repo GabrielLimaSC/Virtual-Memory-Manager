@@ -34,6 +34,7 @@ typedef struct page
     int physical_address;
     int value;
     int count;
+    bool is_valid; // Novo campo para indicar se o frame é válido
     struct page *next;
     struct page *prev;
 } page;
@@ -60,15 +61,16 @@ void read_file(char *filename, page **list)
 
     while (fgets(line, sizeof(line), file))
     {
-        page *new_page = (page *)malloc(sizeof(page)); // Using malloc to allocate memory
+        page *new_page = (page *)malloc(sizeof(page)); // Usando malloc para alocar memória
         if (new_page == NULL)
         {
             exit(1);
         }
-        memset(new_page, 0, sizeof(page)); // Initialize memory to zero
+        memset(new_page, 0, sizeof(page)); // Inicializa a memória com zeros
         new_page->virtual_address = atoi(line);
         new_page->frame_number = -1;
         new_page->count = 1;
+        new_page->is_valid = true; // Inicializa como válido
         translated++;
         new_page->next = NULL;
         new_page->prev = tail;
@@ -181,8 +183,8 @@ void fifo(page *list, int arg, int arg2)
     static page *temp_list = NULL;
     static int tlb_index = 0;
     static int frame_index = 0;
-    static int initialized_tlb = 0; // Track number of initialized entries for TLB
-    static int initialized_frames = 0; // Track number of initialized entries for physical frames
+    static int initialized_tlb = 0; // Número de entradas inicializadas no TLB
+    static int initialized_frames = 0; // Número de entradas inicializadas nos frames físicos
     int tlb_hits = 0;
     int page_faults = 0;
 
@@ -195,8 +197,8 @@ void fifo(page *list, int arg, int arg2)
 
         if (temp_list == NULL)
         {
-            temp_list = (page *)malloc(sizeof(page) * 16); // Using malloc to allocate memory
-            memset(temp_list, 0, sizeof(page) * 16); // Initialize memory to zero
+            temp_list = (page *)malloc(sizeof(page) * 16); // Aloca memória usando malloc
+            memset(temp_list, 0, sizeof(page) * 16); // Inicializa a memória com zeros
         }
 
         while (current != NULL)
@@ -240,8 +242,8 @@ void fifo(page *list, int arg, int arg2)
 
         if (temp_list2 == NULL)
         {
-            temp_list2 = (page *)malloc(sizeof(page) * 128); // Using malloc to allocate memory
-            memset(temp_list2, 0, sizeof(page) * 128); // Initialize memory to zero
+            temp_list2 = (page *)malloc(sizeof(page) * 128); // Aloca memória usando malloc
+            memset(temp_list2, 0, sizeof(page) * 128); // Inicializa a memória com zeros
         }
 
         while (current2 != NULL)
@@ -249,15 +251,12 @@ void fifo(page *list, int arg, int arg2)
             bool found = false;
 
             for (int i = 0; i < initialized_frames; i++)
-            {   
+            {
                 if (temp_list2[i].page_number == current2->page_number)
                 {
                     int frame_indexx = temp_list2[i].frame_number;
-                    
-            
                     current2->frame_number = frame_indexx;
                     current2->value = temp_list2[i].value;
-                     
                     found = true;
                     break;
                 }
@@ -267,14 +266,22 @@ void fifo(page *list, int arg, int arg2)
             {
                 current2->frame_number = frame_index;
                 temp_list2[frame_index].page_number = current2->page_number;
-                temp_list2[frame_index].frame_number = frame_index; // Correctly assign the frame number
+                temp_list2[frame_index].frame_number = frame_index; // Atribui corretamente o número do frame
                 temp_list2[frame_index].virtual_address = current2->virtual_address;
 
                 frame_index = (frame_index + 1) % 128;
                 if (initialized_frames < 128) initialized_frames++;
                 page_faults++;
             }
-            temp_list2[frame_index].virtual_address = current2->virtual_address;
+
+            // Verificação e invalidação de duplicatas
+            page *iterator = list;
+            while (iterator != NULL) {
+                if (iterator != current2 && iterator->frame_number == current2->frame_number) {
+                    iterator->is_valid = false; // Marca como inválido
+                }
+                iterator = iterator->next;
+            }
 
             current2 = current2->next;
         }
@@ -284,8 +291,9 @@ void fifo(page *list, int arg, int arg2)
 
 void lru(page *list, int arg, int arg2) {
     static page *temp_list = NULL;
-    static int initialized_tlb = 0; // Track number of initialized entries for TLB
-    static int initialized_frames = 0; // Track number of initialized entries for physical frames
+    static int frame_index = 0;
+    static int initialized_tlb = 0; // Número de entradas inicializadas no TLB
+    static int initialized_frames = 0; // Número de entradas inicializadas nos frames físicos
     int tlb_hits = 0;
     int page_faults = 0;
 
@@ -296,8 +304,8 @@ void lru(page *list, int arg, int arg2) {
         page *current = list;
 
         if (temp_list == NULL) {
-            temp_list = (page *)malloc(sizeof(page) * 16); // Using malloc to allocate memory
-            memset(temp_list, 0, sizeof(page) * 16); // Initialize memory to zero
+            temp_list = (page *)malloc(sizeof(page) * 16); // Aloca memória usando malloc
+            memset(temp_list, 0, sizeof(page) * 16); // Inicializa a memória com zeros
         }
 
         while (current != NULL) {
@@ -343,16 +351,14 @@ void lru(page *list, int arg, int arg2) {
         page *current2 = list;
 
         if (temp_list2 == NULL) {
-            temp_list2 = (page *)malloc(sizeof(page) * 128); // Using malloc to allocate memory
-            memset(temp_list2, 0, sizeof(page) * 128); // Initialize memory to zero
+            temp_list2 = (page *)malloc(sizeof(page) * 128); // Aloca memória usando malloc
+            memset(temp_list2, 0, sizeof(page) * 128); // Inicializa a memória com zeros
         }
 
         while (current2 != NULL) {
             bool found = false;
-            // printf("Current Page Number: %d\n", current2->page_number);	
+
             for (int i = 0; i < initialized_frames; i++) {
-                // printf("Virtual Address: %d\n", temp_list2[i].virtual_address);
-                // printf("Page Number: %d\n", temp_list2[i].page_number);
                 if (temp_list2[i].page_number == current2->page_number) {
                     current2->frame_number = temp_list2[i].frame_number;
                     current2->value = temp_list2[i].value;
@@ -361,21 +367,31 @@ void lru(page *list, int arg, int arg2) {
                     // Usada recentemente, mover para o final
                     page temp = temp_list2[i];
                     for (int j = i; j < initialized_frames - 1; j++) {
-                        temp_list2[j] = temp_list2[j + 1];
+                        temp_list[j] = temp_list[j + 1];
                     }
-                    temp_list2[initialized_frames - 1] = temp;
+                    temp_list[initialized_frames - 1] = temp;
                     break;
                 }
             }
 
             if (!found) {
-                for (int i = 0; i < initialized_frames - 1; i++) {
-                    temp_list2[i] = temp_list2[i + 1];
-                }
-                temp_list2[initialized_frames - 1] = *current2;
-                current2->frame_number = initialized_frames; // Correctly assign the frame number
+                current2->frame_number = frame_index;
+                temp_list2[frame_index].page_number = current2->page_number;
+                temp_list2[frame_index].frame_number = frame_index; // Atribui corretamente o número do frame
+                temp_list2[frame_index].virtual_address = current2->virtual_address;
+
+                frame_index = (frame_index + 1) % 128;
                 if (initialized_frames < 128) initialized_frames++;
                 page_faults++;
+            }
+
+            // Verificação e invalidação de duplicatas
+            page *iterator = list;
+            while (iterator != NULL) {
+                if (iterator != current2 && iterator->frame_number == current2->frame_number) {
+                    iterator->is_valid = false; // Marca como inválido
+                }
+                iterator = iterator->next;
             }
 
             current2 = current2->next;
@@ -391,21 +407,7 @@ void search_instruction(page *list, FILE *file)
     while (list != NULL)
     {
         // Iterate to find the page with the same page_number and update frame_number if needed
-        page *current = head;
-        while (current != NULL)
-        {
-            if (current->page_number == list->page_number)
-            {
-                
-                if (list->virtual_address == 58428){
-                    printf("%d\n", list->virtual_address);
-                    printf("%d\n", current->virtual_address);
-                }
-                list->frame_number = current->frame_number;
-                break;
-            }
-            current = current->next;
-        }
+        
 
         unsigned long long file_position = (unsigned long long)list->page_number * PAGE_BYTE_SIZE + list->offset;
         fseek(file, file_position, SEEK_SET);
@@ -419,6 +421,23 @@ void search_instruction(page *list, FILE *file)
 
         list->value = value;
         list->physical_address = list->offset + (list->frame_number * PAGE_BYTE_SIZE);
+
+        page *current = head;
+        while (current != NULL)
+        {
+            if (current->page_number == list->page_number && current->is_valid == true)
+            {
+                
+                if (list->virtual_address == 50226){
+                    printf("%d\n", list->virtual_address);
+                    printf("%d\n", current->virtual_address);
+                    printf("%d\n", current->is_valid);
+                }
+                list->frame_number = current->frame_number;
+                break;
+            }
+            current = current->next;
+        }
 
         list = list->next;
     }
@@ -434,9 +453,9 @@ void print_addresses(FILE *output, page *list, int arg)
         {
             fprintf(output, "Virtual address: %d ", current->virtual_address);
             // fprintf(output, "Binary Number: %s ", current->binary_address);
-            fprintf(output, "Page Number: %d ", current->page_number);
+            // fprintf(output, "Page Number: %d ", current->page_number);
             // fprintf(output, "Offset: %d ", current->offset);
-            fprintf(output, "Frame Number: %d ", current->frame_number);
+            // fprintf(output, "Frame Number: %d ", current->frame_number);
             fprintf(output, "TLB: %d ", current->TLB);
             fprintf(output, "Physical address: %d ", current->physical_address);
             fprintf(output, "Value: %d\n", current->value);
