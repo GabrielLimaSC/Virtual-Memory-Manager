@@ -68,7 +68,7 @@ void read_file(char *filename, page **list)
         }
         memset(new_page, 0, sizeof(page)); // Inicializa a memória com zeros
         new_page->virtual_address = atoi(line);
-        new_page->frame_number = -1;
+       
         new_page->count = 1;
         new_page->is_valid = true; // Inicializa como válido
         translated++;
@@ -367,18 +367,16 @@ void lru(page *list, int arg, int arg2) {
                     // Usada recentemente, mover para o final
                     page temp = temp_list2[i];
                     for (int j = i; j < initialized_frames - 1; j++) {
-                        temp_list[j] = temp_list[j + 1];
+                        temp_list2[j] = temp_list2[j + 1];
                     }
-                    temp_list[initialized_frames - 1] = temp;
+                    temp_list2[initialized_frames - 1] = temp;
                     break;
                 }
             }
 
             if (!found) {
                 current2->frame_number = frame_index;
-                temp_list2[frame_index].page_number = current2->page_number;
-                temp_list2[frame_index].frame_number = frame_index; // Atribui corretamente o número do frame
-                temp_list2[frame_index].virtual_address = current2->virtual_address;
+                temp_list2[frame_index] = *current2;
 
                 frame_index = (frame_index + 1) % 128;
                 if (initialized_frames < 128) initialized_frames++;
@@ -402,13 +400,10 @@ void lru(page *list, int arg, int arg2) {
 
 void search_instruction(page *list, FILE *file)
 {
-    page *head = list; // To iterate from the head of the list
+    // page *head = list; Para iterar a partir do início da lista
 
     while (list != NULL)
     {
-        // Iterate to find the page with the same page_number and update frame_number if needed
-        
-
         unsigned long long file_position = (unsigned long long)list->page_number * PAGE_BYTE_SIZE + list->offset;
         fseek(file, file_position, SEEK_SET);
 
@@ -422,22 +417,17 @@ void search_instruction(page *list, FILE *file)
         list->value = value;
         list->physical_address = list->offset + (list->frame_number * PAGE_BYTE_SIZE);
 
-        page *current = head;
-        while (current != NULL)
-        {
-            if (current->page_number == list->page_number && current->is_valid == true)
-            {
-                
-                if (list->virtual_address == 50226){
-                    printf("%d\n", list->virtual_address);
-                    printf("%d\n", current->virtual_address);
-                    printf("%d\n", current->is_valid);
-                }
-                list->frame_number = current->frame_number;
-                break;
-            }
-            current = current->next;
-        }
+        // Atualiza frame_number com base na validade
+        // page *current = head;
+        // while (current != NULL)
+        // {
+        //     if (current->page_number == list->page_number)
+        //     {
+        //         list->frame_number = current->frame_number;
+        //         break;
+        //     }
+        //     current = current->next;
+        // }
 
         list = list->next;
     }
@@ -455,7 +445,7 @@ void print_addresses(FILE *output, page *list, int arg)
             // fprintf(output, "Binary Number: %s ", current->binary_address);
             // fprintf(output, "Page Number: %d ", current->page_number);
             // fprintf(output, "Offset: %d ", current->offset);
-            // fprintf(output, "Frame Number: %d ", current->frame_number);
+            // fprintf(output, "Frame Index: %d ", current->frame_number);
             fprintf(output, "TLB: %d ", current->TLB);
             fprintf(output, "Physical address: %d ", current->physical_address);
             fprintf(output, "Value: %d\n", current->value);
