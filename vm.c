@@ -517,7 +517,7 @@ int main(int argc, char *argv[])
     read_file(address_file, &list);
     convert(list, DECIMAL_TO_BINARY, SEPARATE_FALSE);
     convert(list, BINARY_TO_DECIMAL, SEPARATE_TRUE);
-    fifo(list, TLB_TRUE, PHYSICAL_MEMORY_FALSE); // TLB será aplicado apenas no FIFO
+    fifo(list, TLB_TRUE, PHYSICAL_MEMORY_FALSE); // TLB será aplicado apenas FIFO
 
     if (strcmp(algorithm, "fifo") == 0)
     {
